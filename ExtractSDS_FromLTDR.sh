@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SRCDIR=$HOME/GCII/src
+SRCDIR=$HOME/GCII/src/AVHRR-LTDR
 METADATADIR=$HOME/GCII/data/LTDR/metadata
 
 LTDR_FILE=$1

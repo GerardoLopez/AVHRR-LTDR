@@ -16,7 +16,7 @@ fi
 init_time=`date`
 echo $init_time
 
-SRCDIR=$HOME/GCII/src
+SRCDIR=$HOME/GCII/src/AVHRR-LTDR
 
 DATADIR=$1
 INITDAY=$2

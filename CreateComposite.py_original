@@ -85,7 +85,7 @@ def CreateComposite(layerstack, DoY):
 				IndexLowest_BT_CH4 = numpy.argmin(NewProfile_BT_CH4[IndicesLowestSumSorted])
 
 				for band in range(0,NumberOfBands):
-					composite[i,j,band] = layerstack[i,j,band,IndexData[IndicesLowestSumSorted][IndexLowest_BT_CH4]]
+					layerstack[i,j,band,IndexData[IndicesLowestSumSorted][IndexLowest_BT_CH4]]
 
 				composite[i,j,NumberOfBands] = DoY[IndexData[IndicesLowestSumSorted][IndexLowest_BT_CH4]]
 				composite[i,j,NumberOfBands+1] = NumberOfSamples
@@ -111,8 +111,8 @@ composite = numpy.zeros((rows, cols, NumberOfBands+2), numpy.int16)
 
 # Depending on the processing system, the composite could be created storing ALL
 # datasets in RAM, however for prototyping a tile-based processing will be implemented
-# 3 tiles will be the default setting
-NumberOfTiles = 3
+# 4 tiles will be the default setting
+NumberOfTiles = 4
 
 for Tile in range(1,NumberOfTiles+1):
 	InitRow = (Tile - 1) * (rows / NumberOfTiles)
@@ -153,4 +153,42 @@ new_dataset = driver.Create( 'composite.tif', cols, rows, NumberOfBands+2, GDT_I
 for i in range(1,NumberOfBands+3):
 	new_dataset.GetRasterBand(i).WriteArray(composite[:,:,i-1])
 new_dataset = None
+
+exit()
+
+
+layerstack = numpy.zeros((rows, cols, NumberOfBands), numpy.int16)
+
+print "Reading bands..."
+for i in range(1,NumberOfBands+1):
+	layerstack[:,:,i-1] = dataset.GetRasterBand(i).ReadAsArray()
+
+dataset = None
+
+# QA bit-flag band is stored in band number 10 
+QA = layerstack[:,:,9]
+QA_binary = numpy.zeros((rows, cols), numpy.int16)
+QA_flags = [128, 16512]
+
+print "Screening data using QA flags..."
+for flag in QA_flags:
+	QA_binary = numpy.where(QA == flag, 1, QA_binary)
+
+
+for i in range(1,NumberOfBands+1):
+	layerstack[:,:,i-1] = layerstack[:,:,i-1] * QA_binary
+
+
+# Save results to a ENVI binary file
+format = "ENVI"
+driver = gdal.GetDriverByName(format)
+new_dataset = driver.Create( 'SDS_layerstack_masked.img', cols, rows, NumberOfBands, GDT_Int16 )
+
+print "Saving data..."
+for i in range(1,NumberOfBands+1):
+	new_dataset.GetRasterBand(i).WriteArray(layerstack[:,:,i-1])
+
+new_dataset = None
+
+
 

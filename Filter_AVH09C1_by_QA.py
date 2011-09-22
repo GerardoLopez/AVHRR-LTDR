@@ -25,7 +25,7 @@ dataset = None
 # QA bit-flag band is stored in band number 10 
 QA = layerstack[:,:,9]
 QA_binary = numpy.zeros((rows, cols), numpy.int16)
-QA_flags = [128, 16512]
+QA_flags = [128, 16512, 8320]
 
 print "Screening data using QA flags..."
 for flag in QA_flags:
