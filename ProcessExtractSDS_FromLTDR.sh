@@ -24,6 +24,7 @@ ENDDAY=$3
 
 for SDS in `ls $DATADIR/*.hdf`; do
 	DoY=`echo $SDS | cut -d. -f2 | cut -c6-8`
+	DoY=`echo "$DoY+0" | bc`
 	if [ $DoY -ge $INITDAY ] && [ $DoY -le $ENDDAY ]; then
 		echo "Processing $SDS..."
 		echo $SRCDIR/ExtractSDS_FromLTDR.sh $SDS

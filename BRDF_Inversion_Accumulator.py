@@ -39,36 +39,23 @@ def GetDimensions(File):
 
 	return rows, cols, NumberOfBands
 
-def BRDF_Inverter(Reflectance, Kernels, DoY, NumberOfParameters):
-	rows, cols, NumberOfBands, days = Reflectance.shape
+def BRDF_Inverter(M, V, DoY, NumberOfParameters, NumberOfSamples):
+	rows, cols, NumberOfBands = M.shape
 	parameters = numpy.zeros((rows, cols, NumberOfBands, NumberOfParameters), numpy.float32)
-	samples = numpy.zeros((rows, cols), numpy.int16)
 
 	#(900, 7200, 10, 31)
 	for j in range(0,cols):
 		if j % 100 == 0:
 			print "Processing columns", j
 		for i in range(0,rows):
-			# Extract temporal profile for SREFL CH1, CH2 and CH3
-			ReflectanceProfile = Reflectance[i,j,:,:]
-			# Based on valid observations on SREFL_CH1
-			NumberOfSamples = len(numpy.where( ReflectanceProfile[0] > 0)[0])
-
-			if NumberOfSamples >= 2:
-				IndexData = numpy.where(ReflectanceProfile[0] > 0)[0]
-				refl = ReflectanceProfile[:,IndexData]
-				K = numpy.ones([3, NumberOfSamples])
-				K[1,:] = Kernels[i,j,0,IndexData]
-				K[2,:] = Kernels[i,j,1,IndexData]
-
-				(P, rho_residuals, rank, svals) = lstsq( K.T, refl.T )
+			if NumberOfSamples[i,j] >= 2:
+				(P, rho_residuals, rank, svals) = lstsq(M, V)
 				parameters[i,j,:,:] = P
-				samples[i,j] = NumberOfSamples
 
 				#if i == 925 and j == 1646:
-				#	ipshell = embed()
+				#ipshell = embed()
 
-	return parameters, samples
+	return parameters
 
 
 #--------------------------------------------------------------------------------#
@@ -95,7 +82,7 @@ NumberOfSamples = numpy.zeros((rows, cols), numpy.int16)
 # Depending on the processing system, the composite could be created storing ALL
 # datasets in RAM, however for prototyping a tile-based processing will be implemented
 # 4 tiles will be the default setting
-NumberOfTiles = 16
+NumberOfTiles = 1
 
 for Tile in range(1,NumberOfTiles+1):
 	InitRow = (Tile - 1) * (rows / NumberOfTiles)
@@ -104,21 +91,28 @@ for Tile in range(1,NumberOfTiles+1):
 
 	# Create tmp layerstack
 	NumberOfFiles = len(FileList)
-	Reflectance = numpy.zeros(((rows / NumberOfTiles), cols, NumberOfBands, NumberOfFiles), numpy.float32)
-	Kernels = numpy.zeros(((rows / NumberOfTiles), cols, 2, NumberOfFiles), numpy.float32)
+	Reflectance = numpy.zeros(((rows / NumberOfTiles), cols, NumberOfBands), numpy.float32)
+	Kernels = numpy.zeros(((rows / NumberOfTiles), cols, 2), numpy.float32)
+	tmpNumberOfSamples = numpy.zeros((rows / NumberOfTiles, cols), numpy.int16)
 
-	FileNumber = 1
+	M = numpy.zeros(((rows / NumberOfTiles), cols, 3), numpy.float32)
+	V = numpy.zeros(((rows / NumberOfTiles), cols, 3), numpy.float32)
+
 	for File in FileList:
 		print File
 		dataset = gdal.Open(File, GA_ReadOnly)
 		for band in range(1, NumberOfBands+1):
 			BandData = dataset.GetRasterBand(band).ReadAsArray()
 			if NumberOfTiles > 1:
-				Reflectance[:,:,band-1,FileNumber-1] = BandData[InitRow:EndRow+1,0:cols] * ScaleFactor
+				Reflectance[:,:,band-1] = BandData[InitRow:EndRow+1,0:cols] * ScaleFactor
 			else:
-				Reflectance[:,:,band-1,FileNumber-1] = BandData[:,:] * ScaleFactor
-			BandData = None
+				Reflectance[:,:,band-1] = BandData[:,:] * ScaleFactor
 
+			# Number of samples is based on number of observations on band 2
+			if band == 2:
+				tmpNumberOfSamples[:,:] = numpy.where(BandData[:,:] > 0.0, tmpNumberOfSamples[:,:] + 1, tmpNumberOfSamples[:,:])
+
+			BandData = None
 		dataset = None
 
 		KernelsFile = File[0:len(File)-3] + "kernels.tif"
@@ -126,18 +120,29 @@ for Tile in range(1,NumberOfTiles+1):
 			dataset = gdal.Open(KernelsFile, GA_ReadOnly)
 			BandData = dataset.GetRasterBand(band).ReadAsArray()
 			if NumberOfTiles > 1:
-				Kernels[:,:,band-1,FileNumber-1] = BandData[InitRow:EndRow+1,0:cols]
+				Kernels[:,:,band-1] = BandData[InitRow:EndRow+1,0:cols]
 			else:
-				Kernels[:,:,band-1,FileNumber-1] = BandData[:,:]
+				Kernels[:,:,band-1] = BandData[:,:]
 
 		dataset = None
 
-		FileNumber += 1
+		for j in range(0,cols):
+			for i in range(0,rows):
+				if tmpNumberOfSamples[i,j] >= 2:
+					K = numpy.ones(3)
+					K[1] = Kernels[i,j,0]
+					K[2] = Kernels[i,j,1]
+
+					R = Reflectance[i,j,:]
+
+					M[i,j,:] = M[i,j,:] + (K.T * K)
+					V[i,j,:] = V[i,j,:] + (K.T * R)
 
 	print "Performing BRDF model inversion..."
 	#ipshell = embed()
 
-	tmpParameters, tmpNumberOfSamples = BRDF_Inverter(Reflectance, Kernels, DoY, NumberOfParameters)
+	#tmpParameters = BRDF_Inverter(Reflectance, Kernels, DoY, NumberOfParameters, tmpNumberOfSamples)
+	tmpParameters = BRDF_Inverter(M, V, DoY, NumberOfParameters, tmpNumberOfSamples)
 	parameters[InitRow:EndRow+1,0:cols,:,:] = tmpParameters
 	NumberOfSamples[InitRow:EndRow+1,0:cols] = tmpNumberOfSamples
 	tmpParameters = None
@@ -146,7 +151,7 @@ for Tile in range(1,NumberOfTiles+1):
 print "Writing results to a file..."
 format = "GTiff"
 driver = gdal.GetDriverByName(format)
-new_dataset = driver.Create( 'BRDF_Parameters.tif', cols, rows, (NumberOfBands*NumberOfParameters) + 1, GDT_Float32, ['COMPRESS=PACKBITS'])
+new_dataset = driver.Create( 'BRDF_Parameters_Accumulator.tif', cols, rows, (NumberOfBands*NumberOfParameters) + 1, GDT_Float32 )
 
 k = 1
 for i in range(1,NumberOfBands+1):

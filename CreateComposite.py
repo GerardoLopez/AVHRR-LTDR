@@ -80,9 +80,9 @@ def CreateComposite(layerstack, DoY):
 				# Get the indices of the 3 lowest sums
 				NumberOfSamplesLowestSums = 3
 				IndicesLowestSum = numpy.argsort(Sum_SREFL_CH_1_2)[0:NumberOfSamplesLowestSums]
-				# From the above samples, get the index of the one with lowest BT_CH4
+				# From the above samples, get the index of the one with highest BT_CH4
 				IndicesLowestSumSorted = numpy.sort(IndicesLowestSum)
-				IndexLowest_BT_CH4 = numpy.argmin(NewProfile_BT_CH4[IndicesLowestSumSorted])
+				IndexLowest_BT_CH4 = numpy.argmax(NewProfile_BT_CH4[IndicesLowestSumSorted])
 
 				for band in range(0,NumberOfBands):
 					composite[i,j,band] = layerstack[i,j,band,IndexData[IndicesLowestSumSorted][IndexLowest_BT_CH4]]
