@@ -31,9 +31,11 @@ rm $BandList $HeaderList
 # Filter dataset using QA values
 $SRCDIR/Filter_AVH09C1_by_QA.py
 mv SDS_layerstack_masked.tif `basename $LTDR_FILE hdf`tif
+
 #cp $METADATADIR/GenericHeaderLayerStack.hdr `basename $LTDR_FILE hdf`hdr
 
 mv SDS_layerstack_kernels_masked.tif `basename $LTDR_FILE hdf`kernels.tif
+
 #cp $METADATADIR/GenericHeaderKernels.hdr `basename $LTDR_FILE hdf`kernels.hdr
 
 rm SDS_layerstack.???
