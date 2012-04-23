@@ -20,6 +20,25 @@ def NormalDistribution(mu,sigma):
 		return 1.0*e/C
 	return f
 
+def GetOnlyReflectances(ReflectancesFile, InitRow, EndRow):
+	rows, cols, NumberOfBands = GetDimensions(ReflectancesFile)
+	rows = (EndRow-InitRow)+1
+
+	# Band 1 = vis    Band 2 = NIR    Band 3 = shortwave
+	NumberOfBands = 3
+
+	Reflectance = numpy.zeros((rows, cols, NumberOfBands), numpy.float32)
+
+	dataset = gdal.Open(ReflectancesFile, GA_ReadOnly)
+	for i in range(NumberOfBands):
+		BandData = dataset.GetRasterBand(i+1).ReadAsArray(0,InitRow, cols ,rows)
+		Reflectance[:,:,i] = BandData
+
+	dataset = None
+
+	return Reflectance
+
+
 def GetReflectances(ReflectancesFile, KernelsFile, Weigth, InitRow, EndRow):
 	rows, cols, NumberOfBands = GetDimensions(KernelsFile)
 	rows = (EndRow-InitRow)+1
@@ -81,16 +100,17 @@ def GetReflectances(ReflectancesFile, KernelsFile, Weigth, InitRow, EndRow):
 				E[i,j] = numpy.matrix(Reflectance[i,j,:,:]).T * numpy.matrix(Cinv[i,j,:,:]) * Reflectance[i,j,:,:]
 				NumberOfSamples[i,j] = Weigth
 
-	return ReturnGetReflectances(Reflectance, M, V, E, NumberOfSamples)
+	return ReturnGetReflectances(Reflectance, M, V, E, NumberOfSamples, Kernels)
 
 
 class ReturnGetReflectances(object):
-    def __init__(self, Reflectance, M, V, E, NumberOfSamples):
+    def __init__(self, Reflectance, M, V, E, NumberOfSamples, Kernels):
 		self.Reflectance = Reflectance
 		self.M = M
 		self.V = V
 		self.E = E
 		self.NumberOfSamples = NumberOfSamples
+		self.Kernels = Kernels
 
 
 def GetKernels(KernelsFile, InitRow, EndRow):
